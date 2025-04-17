@@ -66,5 +66,10 @@ public class CognitoController {
         return new ResponseEntity<>(new ApiResponse(HttpStatus.OK, "User enabled successfully", null), HttpStatus.OK);
     }
 
+    @DeleteMapping("/admin/delete-user")
+    public ResponseEntity<ApiResponse> deleteUser(@RequestParam String username) {
+        cognitoService.deleteUser(username);
+        return new ResponseEntity<>(new ApiResponse(HttpStatus.OK, "User deleted successfully", null), HttpStatus.OK);
+    }
 
 }

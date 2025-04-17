@@ -59,9 +59,11 @@ public class CognitoService {
                     .build();
 
             SignUpResponse response = cognitoClient.signUp(signUpRequest);
+            log.info("User created successfully. : {} ", signUpUserDTO.getUserName());
             return response.userSub();
 
         } catch (CognitoIdentityProviderException e) {
+            log.error("error catch in class : CognitoService, method : signUp : {} ", e.getMessage());
             throw new CustomException(e.getMessage(), HttpStatus.BAD_REQUEST);
         }
     }
@@ -79,10 +81,11 @@ public class CognitoService {
 
             this.cognitoClient.confirmSignUp(confirmRequest);
 
-
+            log.info("User confirmed successfully. : {} ", username);
             return "User confirmed successfully.";
 
         } catch (CognitoIdentityProviderException e) {
+            log.error("error catch in class : CognitoService, method : confirmSignUp : {} ", e.getMessage());
             throw new CustomException("Error confirming sign up: " + e.getMessage(), HttpStatus.BAD_REQUEST);
         }
     }
@@ -111,13 +114,17 @@ public class CognitoService {
             tokens.put("ExpiresIn", String.valueOf(result.expiresIn()));
             tokens.put("TokenType", result.tokenType());
 
+            log.info("User logged in successfully. : {} ", loginRequestDTO.getUsername());
             return tokens;
 
         } catch (NotAuthorizedException e) {
+            log.error("error catch in class : CognitoService, method : loginUser catch block NotAuthorizedException {} ", e.getMessage());
             throw new CustomException("Incorrect username or password.", HttpStatus.UNAUTHORIZED);
         } catch (UserNotConfirmedException e) {
+            log.error("error catch in class : CognitoService, method : loginUser catch block UserNotConfirmedException {} ", e.getMessage());
             throw new CustomException("User not confirmed. Please verify your email.", HttpStatus.UNAUTHORIZED);
         } catch (CognitoIdentityProviderException e) {
+            log.error("error catch in class : CognitoService, method : loginUser catch block CognitoIdentityProviderException  {} ", e.getMessage());
             throw new CustomException("Login failed: " + e.getMessage(), HttpStatus.BAD_REQUEST);
         }
     }
@@ -150,6 +157,7 @@ public class CognitoService {
                 .build();
 
         cognitoClient.adminEnableUser(enableUserRequest);
+        log.info("Admin created user with permanent password. : {} ", dto.getUsername());
 
         return dto.getUsername();
     }
@@ -161,20 +169,25 @@ public class CognitoService {
 
         ListUsersResponse response = cognitoClient.listUsers(request);
 
-        return response.users().stream().map(user -> {
-            Map<String, String> attributesMap = user.attributes().stream()
-                    .collect(Collectors.toMap(
-                            AttributeType::name,
-                            AttributeType::value
-                    ));
+        return response.users().stream()
+                .filter(user -> user.attributes().stream()
+                        .noneMatch(attr -> attr.name().equals("custom:is_deleted") && attr.value().equals("true"))
+                )
+                .map(user -> {
+                    Map<String, String> attributesMap = user.attributes().stream()
+                            .collect(Collectors.toMap(
+                                    AttributeType::name,
+                                    AttributeType::value
+                            ));
 
-            return CognitoUserResponse.builder()
-                    .username(user.username())
-                    .status(user.userStatusAsString())
-                    .enabled(user.enabled())
-                    .attributes(attributesMap)
-                    .build();
-        }).toList();
+                    return CognitoUserResponse.builder()
+                            .username(user.username())
+                            .status(user.userStatusAsString())
+                            .enabled(user.enabled())
+                            .attributes(attributesMap)
+                            .build();
+                })
+                .toList();
     }
 
     public void disableUser(String username) {
@@ -193,5 +206,26 @@ public class CognitoService {
                 .build();
 
         cognitoClient.adminEnableUser(request);
+    }
+
+    public void deleteUser(String username) {
+        AdminDisableUserRequest disableRequest = AdminDisableUserRequest.builder()
+                .userPoolId(userPoolId)
+                .username(username)
+                .build();
+        cognitoClient.adminDisableUser(disableRequest);
+
+        AttributeType deleteAttribute = AttributeType.builder()
+                .name("custom:is_deleted")
+                .value("true")
+                .build();
+
+        AdminUpdateUserAttributesRequest updateRequest = AdminUpdateUserAttributesRequest.builder()
+                .userPoolId(userPoolId)
+                .username(username)
+                .userAttributes(deleteAttribute)
+                .build();
+
+        cognitoClient.adminUpdateUserAttributes(updateRequest);
     }
 }
