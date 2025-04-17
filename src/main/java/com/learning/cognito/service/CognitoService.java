@@ -1,5 +1,6 @@
 package com.learning.cognito.service;
 
+import com.learning.cognito.dto.reponse.CognitoUserResponse;
 import com.learning.cognito.dto.request.AdminCreateUserRequestDTO;
 import com.learning.cognito.dto.request.LoginRequestDTO;
 import com.learning.cognito.dto.request.SignUpUserDTO;
@@ -15,7 +16,9 @@ import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityPr
 import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -74,7 +77,7 @@ public class CognitoService {
                     .secretHash(secretHash)
                     .build();
 
-            ConfirmSignUpResponse response = cognitoClient.confirmSignUp(confirmRequest);
+            this.cognitoClient.confirmSignUp(confirmRequest);
 
 
             return "User confirmed successfully.";
@@ -151,4 +154,44 @@ public class CognitoService {
         return dto.getUsername();
     }
 
+    public List<CognitoUserResponse> getAllUsers() {
+        ListUsersRequest request = ListUsersRequest.builder()
+                .userPoolId(userPoolId)
+                .build();
+
+        ListUsersResponse response = cognitoClient.listUsers(request);
+
+        return response.users().stream().map(user -> {
+            Map<String, String> attributesMap = user.attributes().stream()
+                    .collect(Collectors.toMap(
+                            AttributeType::name,
+                            AttributeType::value
+                    ));
+
+            return CognitoUserResponse.builder()
+                    .username(user.username())
+                    .status(user.userStatusAsString())
+                    .enabled(user.enabled())
+                    .attributes(attributesMap)
+                    .build();
+        }).toList();
+    }
+
+    public void disableUser(String username) {
+        AdminDisableUserRequest request = AdminDisableUserRequest.builder()
+                .userPoolId(userPoolId)
+                .username(username)
+                .build();
+
+        cognitoClient.adminDisableUser(request);
+    }
+
+    public void enableUser(String username) {
+        AdminEnableUserRequest request = AdminEnableUserRequest.builder()
+                .userPoolId(userPoolId)
+                .username(username)
+                .build();
+
+        cognitoClient.adminEnableUser(request);
+    }
 }
